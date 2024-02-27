@@ -15,17 +15,10 @@ class ConvNet(torch.nn.Module):
         self.padding = padding
         self.conv1 = torch.nn.Conv2d(1, out_channels, kernel_size=kernel_size, stride=stride, padding=padding)
 
-        self.fc1 = torch.nn.Linear(1 * 26 * 26, 5)
+        self.fc1 = torch.nn.Linear(1 * 26 * 26, 10)
 
     def forward(self, x):
         x = F.relu(self.conv1(x))
-        # x = x.flatten(start_dim=1)
         x = x.view(x.size(0), -1)
-        # [batch_size, out_channels, 28, 28]
-        # print(x.shape)
-        x = self.fc1(x)  # Uncomment if needed
-        # print(F.softmax(x, dim=1))  # Use for multi-class classification
-        # x = x.argmax(dim=1)  # Uncomment if needed
-        # breakpoint()    
-        # print("goes here")
-        return x#.argmax(dim=1)  # Reshape if needed
+        x = self.fc1(x)
+        return x
