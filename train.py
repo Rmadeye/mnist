@@ -8,14 +8,16 @@ import pandas as pd
 import numpy  as np
 from sklearn.model_selection import train_test_split   
 import yaml 
+import matplotlib.pyplot as plt
 
 from network.model import ConvNet
 from network.loader import prepare_data
 from scripts.metrices import Monitor
+from scripts.utils import plot_from_tensor
 
 r =  lambda x: round(x, 2)
 
-def train_model(data_path: str, limit_digits: Optional[List[int]], hparams: str ):
+def train_model(data_path: str, limit_digits: Optional[List[int]], hparams: str, device: str = 'cuda' ):
     #
     data = pd.read_csv(data_path)
     if limit_digits:
@@ -37,7 +39,7 @@ def train_model(data_path: str, limit_digits: Optional[List[int]], hparams: str 
     test_loader = prepare_data(torch.tensor(X_test.values), torch.tensor(y_test.values), training_params['batch_size'])
     val_loader = prepare_data(torch.tensor(X_val.values), torch.tensor(y_val.values), training_params['batch_size'])
 
-    net = ConvNet(**net_params)
+    net = ConvNet(**net_params).to(device)
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(net.parameters(), lr=training_params['lr'])
     metrics = Monitor()
@@ -45,7 +47,7 @@ def train_model(data_path: str, limit_digits: Optional[List[int]], hparams: str 
     for epoch in range(training_params['num_epochs']):
         net.train()
         for i, (inputs, labels) in enumerate(train_loader):
-            # print(labels)
+            inputs, labels = inputs.to(device), labels.to(device)
             optimizer.zero_grad()
             outputs = net(inputs.reshape(-1, 1, 28, 28).float())
             # breakpoint()
@@ -57,6 +59,7 @@ def train_model(data_path: str, limit_digits: Optional[List[int]], hparams: str 
         # metrics.data['loss'].append(loss.item())
         with torch.no_grad():
             for inputs, labels in test_loader:
+                inputs, labels = inputs.to(device), labels.to(device)
                 outputs = net(inputs.float().unsqueeze(1))
                 predicted = torch.argmax(outputs, dim=1)  # Apply sigmoid and round
                 metrics.batch['acc'].append(acc_calculator(labels, predicted))
@@ -76,7 +79,13 @@ def train_model(data_path: str, limit_digits: Optional[List[int]], hparams: str 
         else:
             metrics.data['best_acc'] = metrics.show_last("acc")
             metrics.data['epochs_with_no_improvement'] = 0
-            torch.save(net.state_dict(), 'weights/model.pt')
+            torch.save({
+                'state_dict': net.state_dict(),
+                'monitor': metrics.data,
+                'hparams': hparams
+            },
+                "weights/model.pt")
+            
             metrics.data['best_epoch'] = epoch
     with torch.no_grad():
         for inputs, labels in val_loader:
@@ -84,10 +93,17 @@ def train_model(data_path: str, limit_digits: Optional[List[int]], hparams: str 
             predicted = torch.argmax(outputs, dim=1)  # Apply sigmoid and round
             metrics.val['total'] += labels.size(0)
             metrics.val['correct'] += (predicted == labels).sum().item()
+            # if label and  predicted do  not match, plot the image
+            # if (predicted != labels).sum() > 0:
+            #     for i in range(len(predicted)):
+            #         if predicted[i] != labels[i]:
+            #             fig, ax = plt.subplots()
+            #             plot_from_tensor(inputs[i].reshape(28, 28), ax, title=f'Predicted: {predicted[i]}, Label: {labels[i]}')
+            #             fig.savefig(f'images/{i}.png')
     print(f'Validation accuracy: {r(metrics.validation_results())}')  
         
 
-train_model('data/input/train.csv', list(range(0,10)), 'hparams/base.yaml')
+train_model('data/input/train.csv', list(range(0,10)), 'hparams/base.yaml', device='cpu')
 
 
 
