@@ -5,7 +5,7 @@ network:
   padding: 3
   out_channels: 4
 training:
-  num_epochs: 10
+  num_epochs: 50
   batch_size: 32
   lr: 0.001
   seed: 2137
